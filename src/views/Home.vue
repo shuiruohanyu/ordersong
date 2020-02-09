@@ -1,11 +1,11 @@
 <template>
-  <el-card v-loading="showLoading" :element-loading-text="loadingText"
-  element-loading-spinner="el-icon-loading"
+  <el-card
   >
      <el-row type='flex' justify="center">
         <el-col :span="6" style="font-size:30px">老高点歌台</el-col>
        <el-button type='success' @click="btnOrder" :disabled="isOrder">点歌</el-button>
-       <el-button type='primary' @click="btnSelect" v-if="showManageBtn">抽取幸运观众</el-button>
+       <el-button type='primary' @click="btnSelect" v-if="showManageBtn && !startCount">抽取幸运观众</el-button>
+       <el-button type="info" round @click="btnStop" v-if="startCount">点我喊停</el-button>
        <el-button  @click="btnRemove" v-if="showManageBtn" type='warning'>幸运观众下线</el-button>
        <el-button type='danger' @click="btnReset"  v-if="showManageBtn">重置</el-button>
      </el-row>
@@ -63,9 +63,7 @@ export default {
       timeStamp: null,
       songName: '',
       selectIndex: -1,
-      showLoading: false, // 显示进度
-      loadingCount: 8, // 选择倒计时时间
-      loadingText: '' // 倒计时显示文本
+      startCount: false // 开始选择
     }
   },
   async created () {
@@ -81,6 +79,12 @@ export default {
     }, 2000)
   },
   methods: {
+    // 点击停止
+    btnStop () {
+      this.seletOne() // 选择对应的索引
+      clearInterval(this.flag)
+      this.startCount = false
+    },
     // 移除幸运观众
     btnRemove () {
       this.$confirm('确认要下线当前的幸运观众吗').then(() => {
@@ -103,20 +107,7 @@ export default {
       }
       this.showDialog = true
     },
-    beginLoading () {
-      if (this.loadingCount > 0) {
-        this.showLoading = true
-        this.loadingCount--
-        this.loadingText = `还剩${this.loadingCount}秒钟选人`
-        this.beginFlag = setTimeout(this.beginLoading, 1000)
-      } else {
-        clearTimeout(this.beginFlag)
-        this.loadingCount = 6 // 恢复原来的时间
-        this.seletOne() // 选择对应的索引
-        clearInterval(this.flag)
-        this.showLoading = false
-      }
-    },
+
     btnYes () {
       if (this.songName) {
         this.list.push({
@@ -134,7 +125,7 @@ export default {
       }
     },
     btnSelect () {
-      this.beginLoading()
+      this.startCount = true // 打开状态
       var func = () => {
         if (this.selectIndex < (this.list.length - 1)) {
           this.selectIndex++
@@ -142,7 +133,7 @@ export default {
           this.selectIndex = 0
         }
       }
-      this.flag = setInterval(func, 100)
+      this.flag = setInterval(func, 80)
     },
     btnReset (obj) {
       this.$confirm('是否要重新设置一次点歌任务?').then(() => {
