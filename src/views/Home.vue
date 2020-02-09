@@ -191,7 +191,7 @@ export default {
       return this.list.some(item => item.name === this.userName)
     },
     showManageBtn () {
-      return this.userName === '高高君'
+      return this.userName === '高高君' && this.list.length
     }
   }
 }
