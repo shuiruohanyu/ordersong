@@ -5,20 +5,26 @@
         <el-col :span="6" style="font-size:30px">老高点歌台</el-col>
        <el-button type='success' @click="btnOrder" :disabled="isOrder">点歌</el-button>
        <el-button type='primary' @click="btnSelect" v-if="showManageBtn && !startCount">抽取幸运观众</el-button>
-       <el-button type="info" round @click="btnStop" v-if="startCount">点我喊停</el-button>
-       <el-button  @click="btnRemove" v-if="showManageBtn" type='warning'>幸运观众下线</el-button>
-       <el-button type='danger' @click="btnReset"  v-if="showManageBtn">重置</el-button>
+       <el-button type="info" round @click="btnStop" v-if="isGao && startCount">点我喊停</el-button>
+       <el-button  @click="btnRemove" v-if="showManageBtn" :disabled="startCount" type='warning'>幸运观众下线</el-button>
+       <el-button type='danger' @click="btnReset" :disabled="startCount"  v-if="showManageBtn">重置</el-button>
      </el-row>
-     <div class='list'>
-      <el-card class='my-card' v-for="(item,index) in list" :key="index" :class="{select: selectIndex === index}">
-          <el-row type='flex' justify="center">
-            <el-tag>{{ item.name }}</el-tag>
-          </el-row>
-          <el-row style="height:40px" align="middle" v-if="item.sname" type='flex' justify="center">
-           <el-tag type="success">{{ '点了一首:' + item.sname }}</el-tag>
-          </el-row>
-      </el-card>
+     <el-tag size="medium" type='success'>当前用户:{{ userName  }}</el-tag>
+     <div class='title'>当前班级人数:{{ this.list.length }}</div>
+     <div class='list' ref="myList">
+       <div class='my-card' :ref="'student'+index" v-for="(item,index) in list" :key="index">
+            <el-tag :closable="isGao && !startCount" @close="removeUser(item)"  :type="index === selectIndex ? 'danger' : ''">{{ item.name }}</el-tag>
+      </div>
      </div>
+     <el-slider v-if="isGao" label='速度' @change="changeDuration" :min="1" class='my-Duration' height="200px" vertical v-model="duration"></el-slider>
+     <el-card class='select-card' v-if="selectPeople">
+          <el-row type='flex' justify="center">
+            <div class='userName'>{{ selectPeople.name }}</div>
+          </el-row>
+          <el-row style="height:40px" align="middle" v-if="selectPeople.sname" type='flex' justify="center">
+           <div class="song">{{ '点了一首:' + selectPeople.sname }}</div>
+          </el-row>
+     </el-card>
 
      <el-drawer
          title="请设置下你的名字"
@@ -27,7 +33,7 @@
         <el-row type='flex' justify="center">
           <el-form style='width:80%'>
           <el-form-item>
-              <el-input v-model.trim="userName" style="width:80%"></el-input>
+              <el-input placeholder="名字长度2-5个字" :minlength="2" :maxlength="5" v-model.trim="userName" style="width:80%"></el-input>
              </el-form-item>
              <el-form-item>
                <el-button @click="showDrawer=false">取消</el-button>
@@ -63,7 +69,10 @@ export default {
       timeStamp: null,
       songName: '',
       selectIndex: -1,
-      startCount: false // 开始选择
+      startCount: false, // 开始选择
+      flag: 0,
+      duration: 1, // 初始毫秒值
+      studentFlag: 0 // 记录学生的定时器标记
     }
   },
   async created () {
@@ -79,11 +88,50 @@ export default {
     }, 2000)
   },
   methods: {
+    // 执行滚动到对应的位置
+    scrollStudent () {
+      if (this.$refs['student' + this.selectIndex] && this.$refs.myList) {
+        this.$refs.myList.scrollTop = this.$refs['student' + this.selectIndex][0].offsetTop - 100
+      }
+    },
+    removeUser (obj) {
+      this.list = this.list.filter(item => item.name !== obj.name)
+      const result = {
+        selectIndex: this.selectIndex,
+        list: this.list,
+        timeStamp: this.timeStamp,
+        startCount: false
+      }
+      setContent(JSON.stringify(result))
+    },
     // 点击停止
     btnStop () {
       this.seletOne() // 选择对应的索引
       clearInterval(this.flag)
       this.startCount = false
+      this.scrollStudent()
+    },
+    changeDuration () {
+      if (this.startCount) {
+        this.btnStop() // 先停止
+        this.btnSelect() // 重新开启
+      }
+    },
+    studentStop () {
+      clearInterval(this.studentFlag)
+      this.startCount = false
+      this.scrollStudent()
+    },
+    studentStart () {
+      this.startCount = true
+      var func = () => {
+        if (this.selectIndex < (this.list.length - 1)) {
+          this.selectIndex = this.selectIndex + 1
+        } else {
+          this.selectIndex = 0
+        }
+      }
+      this.studentFlag = setInterval(func, 100 / this.duration)
     },
     // 移除幸运观众
     btnRemove () {
@@ -93,7 +141,8 @@ export default {
         const result = {
           selectIndex: this.selectIndex,
           list: this.list,
-          timeStamp: this.timeStamp
+          timeStamp: this.timeStamp,
+          startCount: false
         }
         setContent(JSON.stringify(result))
       })
@@ -114,11 +163,13 @@ export default {
           name: this.userName,
           sname: this.songName,
           time: this.timeStamp
+
         })
         const result = {
           selectIndex: this.selectIndex,
           list: this.list,
-          timeStamp: this.timeStamp
+          timeStamp: this.timeStamp,
+          startCount: this.startCount
         }
         setContent(JSON.stringify(result))
         this.showDialog = false
@@ -126,14 +177,25 @@ export default {
     },
     btnSelect () {
       this.startCount = true // 打开状态
+      this.saveStartCountState() // 保存到后端保证后台现在的状态是Ok的
       var func = () => {
         if (this.selectIndex < (this.list.length - 1)) {
-          this.selectIndex++
+          this.selectIndex = this.selectIndex + 1
         } else {
           this.selectIndex = 0
         }
       }
-      this.flag = setInterval(func, 80)
+      this.flag = setInterval(func, 100 / this.duration)
+    },
+    // 保存当前的开始状态数据 用来识别
+    saveStartCountState () {
+      const result = {
+        selectIndex: this.selectIndex,
+        list: this.list,
+        timeStamp: this.timeStamp,
+        startCount: this.startCount // 是否开启点名程序
+      }
+      setContent(JSON.stringify(result))
     },
     btnReset (obj) {
       this.$confirm('是否要重新设置一次点歌任务?').then(() => {
@@ -143,7 +205,8 @@ export default {
         const result = {
           selectIndex: this.selectIndex,
           list: this.list,
-          timeStamp: this.timeStamp
+          timeStamp: this.timeStamp,
+          startCount: false // 是否开启点名程序
         }
         setContent(JSON.stringify(result))
         this.$message({
@@ -158,7 +221,8 @@ export default {
       const result = {
         selectIndex: this.selectIndex,
         list: this.list,
-        timeStamp: this.timeStamp
+        timeStamp: this.timeStamp,
+        startCount: false // 关闭状态
       }
       setContent(JSON.stringify(result))
     },
@@ -172,6 +236,8 @@ export default {
         return false
       }
       localStorage.setItem('myUserName', this.userName)
+      this.list.push({ name: this.userName })
+      this.saveStartCountState()
       this.showDrawer = false
     },
     sameName (name) {
@@ -182,7 +248,28 @@ export default {
       const result = JSON.parse(data.content) // 当前班里的所有数据
       // { timeStamp:, list: [] , selectIndex: -1 }
       this.timeStamp = result.timeStamp
-      this.selectIndex = result.selectIndex
+      // 这里要处理两种场景 老高 /学生端
+      // 如果是老高 所有的状态只由自己控制
+      // 如果是学生 所有的状态由老高控制
+      if (this.isGao) {
+        // 老高
+        this.startCount = result.startCount
+      } else {
+        // 学生端
+        if (!this.startCount && result.startCount) {
+          // 原来没开启 现在开启了 开始学生状态
+          this.studentStart() // 学生端开启
+        } else if (this.startCount && !result.startCount) {
+          // 原来没开启 现在开启了
+          this.studentStop()
+        } else {
+          // 如果学生端状态一致 此时动作已经开启 因为 默认值是false 一方任何不同都会进到上面的逻辑 这里不需要做任何操作
+        }
+      }
+      if (!this.startCount) {
+        // 只在不点名的时候赋值
+        this.selectIndex = result.selectIndex
+      }
       this.list = result.list
     }
   },
@@ -192,6 +279,14 @@ export default {
     },
     showManageBtn () {
       return this.userName === '高高君' && this.list.length
+    },
+    // 是否是老高
+    isGao () {
+      return this.userName === '高高君'
+    },
+    // 当前选中的
+    selectPeople () {
+      return this.selectIndex > -1 ? this.list[this.selectIndex] : this.list[0]
     }
   }
 }
@@ -202,18 +297,56 @@ export default {
   background: none !important;
 }
 .list {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-around;
+   height: 550px;
+   overflow-x: hidden;
+   overflow-y: auto;
+   width: 160px;
+   border:1px solid #ccc;
   .my-card {
-    width: 180px;
-    height: 100px;
-    margin: 20px;
-    background-image: url('../assets/back.jpg');
-    background-size: cover;
+    width: 130px;
+    margin: 5px 20px;
   }
-  .select {
- background-image: url('../assets/select.jpg');
- }
+
 }
+.my-Duration {
+  position: absolute !important;
+  top: 50%;
+  margin-top: -100px;
+  left:250px;
+}
+  .select-card {
+    position: absolute ;
+    top: 50%;
+    left:50%;
+    margin-left: -200px;
+    margin-top: -200px;
+    // margin: 20px auto;
+    width: 400px;
+    height: 400px;
+    background-image: url('../assets/select.jpg');
+    background-size: cover;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    align-items: center;
+.song {
+     margin-top:40px;
+     text-align: center;
+     font-size: 20px;
+     color: red
+  }
+
+    .userName {
+      text-align: center;
+      border-radius: 50%;
+      overflow: hidden;
+       height: 150px;
+       width:150px;
+       color: #fff;
+       font-size: 40px;
+       line-height: 150px;
+       font-weight: bold;
+       background-color: rgba(10, 86, 226, 0.575)
+    }
+  }
 </style>
