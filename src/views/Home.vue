@@ -1,6 +1,5 @@
 <template>
-  <el-card
-  >
+  <el-card>
      <el-row type='flex' justify="center">
         <el-col :span="6" style="font-size:30px">老高点歌台</el-col>
        <el-button type='success' @click="btnOrder" :disabled="isOrder">点歌</el-button>
@@ -16,7 +15,7 @@
             <el-tag :closable="isGao && !startCount" @close="removeUser(item)"  :type="index === selectIndex ? 'danger' : ''">{{ item.name }}</el-tag>
       </div>
      </div>
-     <el-slider v-if="isGao" label='速度' @change="changeDuration" :min="1" class='my-Duration' height="200px" vertical v-model="duration"></el-slider>
+     <el-slider v-if="isGao" label='速度'  :min="1" class='my-Duration' height="200px" vertical v-model="duration"></el-slider>
      <el-card class='select-card' v-if="selectPeople">
           <el-row type='flex' justify="center">
             <div class='userName'>{{ selectPeople.name }}</div>
@@ -54,11 +53,13 @@
            <el-button type='primary' @click="btnYes">确定</el-button>
         </el-row>
       </el-dialog>
-  </el-card>
+      <audio ref="myVoice"  style='display:none' > </audio>
+   </el-card>
 </template>
 
 <script>
 import { getContent, setContent } from '@/api/user'
+import { getVoice } from '@/constant/key'
 export default {
   data () {
     return {
@@ -88,6 +89,11 @@ export default {
     }, 2000)
   },
   methods: {
+    // 用来手动的触发数据
+    async  getVoice (text) {
+      this.$refs.myVoice.src = await getVoice(text)
+      this.$refs.myVoice.play()
+    },
     // 执行滚动到对应的位置
     scrollStudent () {
       if (this.$refs['student' + this.selectIndex] && this.$refs.myList) {
@@ -110,12 +116,6 @@ export default {
       clearInterval(this.flag)
       this.startCount = false
       this.scrollStudent()
-    },
-    changeDuration () {
-      if (this.startCount) {
-        this.btnStop() // 先停止
-        this.btnSelect() // 重新开启
-      }
     },
     studentStop () {
       clearInterval(this.studentFlag)
@@ -176,6 +176,7 @@ export default {
       }
     },
     btnSelect () {
+      this.getVoice('老高开始点名!')
       this.startCount = true // 打开状态
       this.saveStartCountState() // 保存到后端保证后台现在的状态是Ok的
       var func = () => {
@@ -224,6 +225,8 @@ export default {
         timeStamp: this.timeStamp,
         startCount: false // 关闭状态
       }
+      this.getVoice('老高好坏,抽中了' + this.selectPeople.name)
+
       setContent(JSON.stringify(result))
     },
     btnOK () {
@@ -260,6 +263,8 @@ export default {
           // 原来没开启 现在开启了 开始学生状态
           this.studentStart() // 学生端开启
         } else if (this.startCount && !result.startCount) {
+          this.getVoice(`为${result.list[result.selectIndex].name}同学鼓掌吧,他的运气真是无敌了`)
+
           // 原来没开启 现在开启了
           this.studentStop()
         } else {
